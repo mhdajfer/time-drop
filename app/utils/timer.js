@@ -4,6 +4,9 @@ export const POSITIONS = ["inline", "top", "bottom"];
 export const SIZES = ["small", "medium", "large"];
 export const URGENCY_EFFECTS = ["none", "pulse"];
 
+// Shown above the countdown when the merchant hasn't written a promotion message.
+export const DEFAULT_MESSAGE = "Hurry! Sale ends in";
+
 export const TIMER_DEFAULTS = {
   description: "",
   targetType: "all",
