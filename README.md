@@ -1,237 +1,227 @@
-# Shopify App Template - React Router
+# TimeDrop: Countdown Timer + Analytics
 
-This is a template for building a [Shopify app](https://shopify.dev/docs/apps/getting-started) using [React Router](https://reactrouter.com/). It was forked from the [Shopify Remix app template](https://github.com/Shopify/shopify-app-template-remix) and converted to React Router.
+A Shopify app that adds countdown timers to product pages and counts how often shoppers see them.
 
-Rather than cloning this repo, follow the [Quick Start steps](https://github.com/Shopify/shopify-app-template-react-router#quick-start).
+## Features
 
-Visit the [`shopify.dev` documentation](https://shopify.dev/docs/api/shopify-app-react-router) for more details on the React Router app package.
+- **Fixed timers:** start and end date; every shopper counts down to the same moment.
+- **Evergreen timers:** a per-visitor countdown, stored in `localStorage`.
+- **Targeting:** all products, specific products or specific collections (Shopify Resource Picker).
+- **Appearance:** message, colors, size, position (inline, top bar or bottom bar) and an urgency pulse before the end.
+- **Dashboard:** status (active, scheduled, expired), search, filter, sort and impressions per timer.
+- **Storefront:** a Preact widget in a theme app block, 7.2 KB gzipped.
 
-## Upgrading from Remix
+## Tech stack
 
-If you have an existing Remix app that you want to upgrade to React Router, please follow the [upgrade guide](https://github.com/Shopify/shopify-app-template-react-router/wiki/Upgrading-from-Remix). Otherwise, please follow the quick start guide below.
+| Part | Choice |
+|---|---|
+| Database | MongoDB with Mongoose. Shopify sessions use `@shopify/shopify-app-session-storage-mongodb` |
+| Server | Node 22.12+ and React Router 7, served by `@react-router/serve` (Express). JavaScript only |
+| Admin UI | React, Polaris web components, App Bridge |
+| Storefront | Theme app extension, Preact, esbuild |
+| Tests and lint | Vitest, ESLint |
 
-## Quick start
+## Setup
 
-### Prerequisites
+**You need:** Node 22.12+, MongoDB (local or Atlas), a Shopify Partner account with a development store, and Shopify CLI.
 
-Before you begin, you'll need to [download and install the Shopify CLI](https://shopify.dev/docs/apps/tools/cli/getting-started) if you haven't already.
-
-### Setup
-
-```shell
-shopify app init --template=https://github.com/Shopify/shopify-app-template-react-router
+```bash
+git clone https://github.com/mhdajfer/time-drop.git
+cd time-drop
+npm install
+cp .env.example .env      # set MONGODB_URI, including the database name
+npm run config:link       # link to your own app in the Partner Dashboard
+npm run dev               # builds the widget, starts the tunnel and the app
 ```
 
-### Local Development
+1. Press `p` in the terminal to open the app in your store's admin. Create a timer there.
+2. In the theme editor, open a product template and add **Apps → Countdown timer**, then save.
+3. Open a product page in the store.
 
-```shell
-shopify app dev
+| Command | What it does |
+|---|---|
+| `npm run dev` | Runs `shopify app dev`, which builds the widget first |
+| `npm test` | Runs the unit tests |
+| `npm run lint` | Runs ESLint |
+| `npm run build:widget` | Bundles the widget and prints its size |
+| `npm run dev:widget` | Rebuilds the widget on every change |
+| `npm run deploy` | Builds the widget, then runs `shopify app deploy` |
+
+## Architecture
+
+```
+Admin (embedded in Shopify)                 Storefront product page
+  Polaris pages                               Theme app block + Preact widget
+        │ fetch, with App Bridge session token     │ GET/POST /apps/timedrop/*
+        ▼                                          ▼
+  /api/timers  (REST)                         Shopify App Proxy (adds a signature)
+        │                                          │ /proxy/*
+        └──────────────► React Router server ◄─────┘
+                                │
+                             MongoDB  (timers, shopify_sessions)
 ```
 
-Press P to open the URL to your app. Once you click install, you can start development.
+```
+app/
+  models/timer.server.js       Timer schema, indexes and shop-scoped queries
+  routes/app.*                 Admin pages: dashboard, create and edit
+  routes/api.*                 Admin REST API
+  routes/proxy.*               Storefront API, reached through the app proxy
+  components/                  Form, preview, delete dialog, status badge
+  utils/                       Timer rules, validation, timezone, rate limiter, impression buffer
+widget/src/                    Storefront widget, built into the extension
+extensions/countdown-timer/    Theme app extension: app block and CSS
+```
 
-Local development is powered by [the Shopify CLI](https://shopify.dev/docs/apps/tools/cli). It logs into your account, connects to an app, provides environment variables, updates remote config, creates a tunnel and provides commands to generate extensions.
+### Decisions
 
-### Authenticating and querying data
+- **No custom Express server.** The template's production server (`@react-router/serve`) is already Express. Shopify's auth helpers (`authenticate.admin`, `authenticate.public.appProxy`) work directly in routes, and nothing in the PRD needs custom middleware.
+- **Admin pages call the REST API.** They use `fetch`, and App Bridge adds the session token to each request.
+- **App proxy for the storefront.** Requests are same-origin, so there's no CORS. Shopify signs every request, so the shop is verified, and no keys reach the browser.
+- **Theme app extension, not ScriptTag.** The merchant places the block in the theme editor.
+- **One validator for both sides.** [`app/utils/validate-timer.js`](app/utils/validate-timer.js) runs in the form for instant errors and again in the API.
+- **Store timezone.** Dates are entered and shown in the store's timezone (`shop.ianaTimezone`) and stored in UTC.
 
-To authenticate and query data you can use the `shopify` const that is exported from `/app/shopify.server.js`:
+## Data model
 
-```js
-export async function loader({ request }) {
-  const { admin } = await shopify.authenticate.admin(request);
+One `timers` collection. Fields: `shop`, `name`, `description` (the storefront message), `type` (`fixed` or `evergreen`), `startsAt`, `endsAt`, `durationMinutes`, `targetType` (`all`, `products` or `collections`), `targetIds` (Shopify GIDs), the appearance fields, `impressions`, and timestamps.
 
-  const response = await admin.graphql(`
-    {
-      products(first: 25) {
-        nodes {
-          title
-          description
-        }
-      }
-    }`);
+- **Shop isolation:** every query filters by `shop`. The shop always comes from the verified session or the app proxy signature, never from request input.
+- **Analytics:** `impressions` is a counter on the timer, increased with `$inc`.
+- **Evergreen timers:** stored with `endsAt: null`, so one "not ended" filter covers both timer types.
 
-  const {
-    data: {
-      products: { nodes },
-    },
-  } = await response.json();
+| Index | Used by |
+|---|---|
+| `{ shop, createdAt: -1 }` | Dashboard list |
+| `{ shop, targetType, endsAt }` | Storefront lookup: timers for all products |
+| `{ shop, targetIds, endsAt }` | Storefront lookup: product and collection timers |
+| `shopify_sessions: { id }` (unique), `{ shop }` | Session lookups, added at startup because Shopify's MongoDB storage creates no indexes |
 
-  return nodes;
+When several timers match a product, the product timer wins, then the collection timer, then the all-products timer. Ties go to the timer that ends first.
+
+## API
+
+### Admin API
+
+Every request needs the App Bridge session token (`Authorization: Bearer ...`). All responses send `Cache-Control: no-store`.
+
+| Method | Path | Success | Errors |
+|---|---|---|---|
+| GET | `/api/timers` | `200 { timers }` | 401 |
+| POST | `/api/timers` | `201 { timer }` and a `Location` header | 400, 401, 422 |
+| GET | `/api/timers/:id` | `200 { timer }` | 401, 404 |
+| PUT | `/api/timers/:id` | `200 { timer }` | 400, 401, 404, 422 |
+| DELETE | `/api/timers/:id` | `204` | 401, 404 |
+
+- **Other methods:** `405` with an `Allow` header.
+- **Unexpected errors:** `500`.
+- **Error body:** `{ "error": "message", "errors": { "field": "message" } }`. The `errors` object is only sent with 422.
+- **Other shops:** a timer belonging to another shop returns 404.
+
+Request body for POST and PUT:
+
+```json
+{
+  "name": "Black Friday",
+  "description": "Black Friday sale ends in",
+  "type": "fixed",
+  "startsAt": "2026-11-27T05:00:00.000Z",
+  "endsAt": "2026-12-01T04:59:00.000Z",
+  "durationMinutes": null,
+  "targetType": "collections",
+  "targetIds": ["gid://shopify/Collection/123"],
+  "backgroundColor": "#1a1a1a",
+  "textColor": "#ffffff",
+  "size": "medium",
+  "position": "inline",
+  "urgency": "pulse",
+  "urgencyMinutes": 15
 }
 ```
 
-This template comes pre-configured with examples of:
+Responses return the stored timer, with `id` (in place of `_id`) and its current `status`.
 
-1. Setting up your Shopify app in [/app/shopify.server.ts](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/shopify.server.ts)
-2. Querying data using Graphql. Please see: [/app/routes/app.\_index.tsx](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/routes/app._index.tsx).
-3. Responding to webhooks. Please see [/app/routes/webhooks.tsx](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/routes/webhooks.app.uninstalled.tsx).
-4. Using metafields, metaobjects, and declarative custom data definitions. Please see [/app/routes/app.\_index.tsx](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/routes/app._index.tsx) and [shopify.app.toml](https://github.com/Shopify/shopify-app-template-react-router/blob/main/shopify.app.toml).
+### Storefront API (through the app proxy)
 
-Please read the [documentation for @shopify/shopify-app-react-router](https://shopify.dev/docs/api/shopify-app-react-router) to see what other API's are available.
+Shopify forwards `/apps/timedrop/*` to `/proxy/*` and signs each request. A missing or invalid signature returns `400`.
 
-## Shopify Dev MCP
+| Method | Path | Success | Errors |
+|---|---|---|---|
+| GET | `/apps/timedrop/timer?product=<id>&collections=<id,id>` | `200 { timer }`, or `{ timer: null }` | 400, 429 |
+| POST | `/apps/timedrop/impressions` with body `{ "timerId": "..." }` | `202` | 400, 405, 429 |
 
-This template is configured with the Shopify Dev MCP. This instructs [Cursor](https://cursor.com/), [GitHub Copilot](https://github.com/features/copilot) and [Claude Code](https://claude.com/product/claude-code) and [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) to use the Shopify Dev MCP.
+The timer response is cached with `Cache-Control: public, max-age=60, stale-while-revalidate=60`. It contains only what the widget needs:
 
-For more information on the Shopify Dev MCP please read [the documentation](https://shopify.dev/docs/apps/build/devmcp).
+- `id`, `type`, `endsAt`, `durationMinutes`
+- `message`
+- `backgroundColor`, `textColor`, `size`, `position`
+- `urgency`, `urgencyMinutes`
 
-## Deployment
+## Rate limiting
 
-### Application Storage
+- **Storefront endpoints:** 300 requests per minute for each shop and shopper IP (`X-Forwarded-For`). This is a fixed window held in memory, and the limit returns `429` with `Retry-After`.
+- **Admin API:** no app-level limit. Every call needs a valid session token.
+- **Limitations:**
+  - The counters live in one process. With several instances, they'd need a shared store such as Redis.
+  - Shopify sometimes forwards its own IP in `X-Forwarded-For`, so the limit is set high enough not to throttle a busy store.
 
-This template uses [Prisma](https://www.prisma.io/) to store session data, by default using an [SQLite](https://www.sqlite.org/index.html) database.
-The database is defined as a Prisma schema in `prisma/schema.prisma`.
+## Performance
 
-This use of SQLite works in production if your app runs as a single instance.
-The database that works best for you depends on the data your app needs and how it is queried.
-Here’s a short list of databases providers that provide a free tier to get started:
+Measured locally (Windows, MongoDB 6.0.8):
 
-| Database   | Type             | Hosters                                                                                                                                                                                                                                    |
-| ---------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| MySQL      | SQL              | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-mysql), [Planet Scale](https://planetscale.com/), [Amazon Aurora](https://aws.amazon.com/rds/aurora/), [Google Cloud SQL](https://cloud.google.com/sql/docs/mysql) |
-| PostgreSQL | SQL              | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-postgresql), [Amazon Aurora](https://aws.amazon.com/rds/aurora/), [Google Cloud SQL](https://cloud.google.com/sql/docs/postgres)                                   |
-| Redis      | Key-value        | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-redis), [Amazon MemoryDB](https://aws.amazon.com/memorydb/)                                                                                                        |
-| MongoDB    | NoSQL / Document | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-mongodb), [MongoDB Atlas](https://www.mongodb.com/atlas/database)                                                                                                  |
+| What | Result | How it was measured |
+|---|---|---|
+| Widget bundle | 16.9 KB raw, **7.2 KB gzipped** | Printed by `npm run build:widget`. Preact is about 13 KB of the raw size |
+| Timer endpoint | **p50 4.2 ms, p95 5.1 ms** | 100 signed requests through the production build, including the signature check, session lookup and query. Not measured through Shopify's proxy |
+| Layout shift | **CLS 0** with an inline timer; **0.017** when the slot is released | `PerformanceObserver` in Chromium, on a local test page with a mock API |
 
-To use one of these, you can use a different [datasource provider](https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#datasource) in your `schema.prisma` file, or a different [SessionStorage adapter package](https://github.com/Shopify/shopify-api-js/blob/main/packages/shopify-api/docs/guides/session-storage.md).
+What keeps it fast:
 
-### Build
+- **One request per product page,** cached for 60 seconds in the browser and in `sessionStorage`. The widget refetches only after a fixed timer ends.
+- **Indexed, shop-scoped queries.** `explain()` shows index scans for the storefront lookup. Queries use `lean()` and load only the fields they need.
+- **Batched impressions.** They're counted in memory and written every 5 seconds as one `bulkWrite`.
+- **No layout shift.** The block reserves the timer's height (96 px). Digits are fixed-width, the pulse only uses `transform`, and reduced-motion settings are respected.
+- **Widget size.** Shopify's guideline for app block JavaScript is 10 KB compressed. Theme Check measures raw bytes, so [`.theme-check.yml`](extensions/countdown-timer/.theme-check.yml) raises the raw threshold to cover Preact.
 
-Build the app by running the command below with the package manager of your choice:
+## Security
 
-Using yarn:
+- **Admin:** `authenticate.admin` verifies the session token. A request with no token gets `401`.
+- **Storefront:** `authenticate.public.appProxy` verifies Shopify's HMAC signature.
+- **Database access:** every query is scoped to the authenticated shop. IDs are validated, so operator objects like `{ "$ne": null }` are rejected.
+- **Input:** only known fields are kept. HTML is stripped, colors must be hex, options must match fixed lists, Shopify IDs must match their format, and lists are capped. Text is rendered escaped by React and Preact.
+- **Browser data:** the storefront never receives the shop, internal names or impressions. Secrets stay in server environment variables.
 
-```shell
-yarn build
-```
+## Testing
 
-Using npm:
+`npm test` runs 73 Vitest tests covering:
 
-```shell
-npm run build
-```
+- timer status, matching and priority
+- input validation and sanitizing
+- timezone conversion and form value conversion
+- the rate limiter and the impression buffer
+- the widget's countdown and evergreen logic
+- the admin and storefront route handlers, with Shopify auth and the database mocked
 
-Using pnpm:
+The admin UI and the theme block aren't covered by automated tests.
 
-```shell
-pnpm run build
-```
+## Assumptions
 
-## Hosting
+- **Create and edit pages** are full pages instead of the modal in the reference screenshot.
+- **Position:** "inline" means wherever the merchant places the block. "Top" and "bottom" are fixed bars.
+- **Evergreen timers** restart after they run out, after 30 minutes away (a session), or if their length changes.
+- **One timer per product:** product timers win, then collection timers, then all-products timers. Ties go to the timer that ends first.
+- **An impression** is one page view where the timer was shown. Views in the theme editor aren't counted.
+- **Fixed timers** use the shopper's clock. A server time correction would conflict with the 60-second response cache.
 
-When you're ready to set up your app in production, you can follow [our deployment documentation](https://shopify.dev/docs/apps/launch/deployment) to host it externally. From there, you have a few options:
+## Trade-offs and what I'd improve
 
-- [Google Cloud Run](https://shopify.dev/docs/apps/launch/deployment/deploy-to-google-cloud-run): This tutorial is written specifically for this example repo, and is compatible with the extended steps included in the subsequent [**Build your app**](tutorial) in the **Getting started** docs. It is the most detailed tutorial for taking a React Router-based Shopify app and deploying it to production. It includes configuring permissions and secrets, setting up a production database, and even hosting your apps behind a load balancer across multiple regions.
-- [Fly.io](https://fly.io/docs/js/shopify/): Leverages the Fly.io CLI to quickly launch Shopify apps to a single machine.
-- [Render](https://render.com/docs/deploy-shopify-app): This tutorial guides you through using Docker to deploy and install apps on a Dev store.
-- [Manual deployment guide](https://shopify.dev/docs/apps/launch/deployment/deploy-to-hosting-service): This resource provides general guidance on the requirements of deployment including environment variables, secrets, and persistent data.
-
-When you reach the step for [setting up environment variables](https://shopify.dev/docs/apps/deployment/web#set-env-vars), you also need to set the variable `NODE_ENV=production`.
-
-## Gotchas / Troubleshooting
-
-### Database tables don't exist
-
-If you get an error like:
-
-```
-The table `main.Session` does not exist in the current database.
-```
-
-Create the database for Prisma. Run the `setup` script in `package.json` using `npm`, `yarn` or `pnpm`.
-
-### Navigating/redirecting breaks an embedded app
-
-Embedded apps must maintain the user session, which can be tricky inside an iFrame. To avoid issues:
-
-1. Use `Link` from `react-router` or `@shopify/polaris`. Do not use `<a>`.
-2. Use `redirect` returned from `authenticate.admin`. Do not use `redirect` from `react-router`
-3. Use `useSubmit` from `react-router`.
-
-This only applies if your app is embedded, which it will be by default.
-
-### Webhooks: shop-specific webhook subscriptions aren't updated
-
-If you are registering webhooks in the `afterAuth` hook, using `shopify.registerWebhooks`, you may find that your subscriptions aren't being updated.
-
-Instead of using the `afterAuth` hook declare app-specific webhooks in the `shopify.app.toml` file. This approach is easier since Shopify will automatically sync changes every time you run `deploy` (e.g: `npm run deploy`). Please read these guides to understand more:
-
-1. [app-specific vs shop-specific webhooks](https://shopify.dev/docs/apps/build/webhooks/subscribe#app-specific-subscriptions)
-2. [Create a subscription tutorial](https://shopify.dev/docs/apps/build/webhooks/subscribe/get-started?deliveryMethod=https)
-
-If you do need shop-specific webhooks, keep in mind that the package calls `afterAuth` in 2 scenarios:
-
-- After installing the app
-- When an access token expires
-
-During normal development, the app won't need to re-authenticate most of the time, so shop-specific subscriptions aren't updated. To force your app to update the subscriptions, uninstall and reinstall the app. Revisiting the app will call the `afterAuth` hook.
-
-### Webhooks: Admin created webhook failing HMAC validation
-
-Webhooks subscriptions created in the [Shopify admin](https://help.shopify.com/en/manual/orders/notifications/webhooks) will fail HMAC validation. This is because the webhook payload is not signed with your app's secret key.
-
-The recommended solution is to use [app-specific webhooks](https://shopify.dev/docs/apps/build/webhooks/subscribe#app-specific-subscriptions) defined in your toml file instead. Test your webhooks by triggering events manually in the Shopify admin(e.g. Updating the product title to trigger a `PRODUCTS_UPDATE`).
-
-### Webhooks: Admin object undefined on webhook events triggered by the CLI
-
-When you trigger a webhook event using the Shopify CLI, the `admin` object will be `undefined`. This is because the CLI triggers an event with a valid, but non-existent, shop. The `admin` object is only available when the webhook is triggered by a shop that has installed the app. This is expected.
-
-Webhooks triggered by the CLI are intended for initial experimentation testing of your webhook configuration. For more information on how to test your webhooks, see the [Shopify CLI documentation](https://shopify.dev/docs/apps/tools/cli/commands#webhook-trigger).
-
-### Incorrect GraphQL Hints
-
-By default the [graphql.vscode-graphql](https://marketplace.visualstudio.com/items?itemName=GraphQL.vscode-graphql) extension for will assume that GraphQL queries or mutations are for the [Shopify Admin API](https://shopify.dev/docs/api/admin). This is a sensible default, but it may not be true if:
-
-1. You use another Shopify API such as the storefront API.
-2. You use a third party GraphQL API.
-
-If so, please update [.graphqlrc.ts](https://github.com/Shopify/shopify-app-template-react-router/blob/main/.graphqlrc.ts).
-
-### Using Defer & await for streaming responses
-
-By default the CLI uses a cloudflare tunnel. Unfortunately cloudflare tunnels wait for the Response stream to finish, then sends one chunk. This will not affect production.
-
-To test [streaming using await](https://reactrouter.com/api/components/Await#await) during local development we recommend [localhost based development](https://shopify.dev/docs/apps/build/cli-for-apps/networking-options#localhost-based-development).
-
-### "nbf" claim timestamp check failed
-
-This is because a JWT token is expired. If you are consistently getting this error, it could be that the clock on your machine is not in sync with the server. To fix this ensure you have enabled "Set time and date automatically" in the "Date and Time" settings on your computer.
-
-### Using MongoDB and Prisma
-
-If you choose to use MongoDB with Prisma, there are some gotchas in Prisma's MongoDB support to be aware of. Please see the [Prisma SessionStorage README](https://www.npmjs.com/package/@shopify/shopify-app-session-storage-prisma#mongodb).
-
-### Unable to require(`C:\...\query_engine-windows.dll.node`).
-
-Unable to require(`C:\...\query_engine-windows.dll.node`).
-The Prisma engines do not seem to be compatible with your system.
-
-query_engine-windows.dll.node is not a valid Win32 application.
-
-**Fix:** Set the environment variable:
-
-```shell
-PRISMA_CLIENT_ENGINE_TYPE=binary
-```
-
-This forces Prisma to use the binary engine mode, which runs the query engine as a separate process and can work via emulation on Windows ARM64.
-
-## Resources
-
-React Router:
-
-- [React Router docs](https://reactrouter.com/home)
-
-Shopify:
-
-- [Intro to Shopify apps](https://shopify.dev/docs/apps/getting-started)
-- [Shopify App React Router docs](https://shopify.dev/docs/api/shopify-app-react-router)
-- [Shopify CLI](https://shopify.dev/docs/apps/tools/cli)
-- [Shopify App Bridge](https://shopify.dev/docs/api/app-bridge-library).
-- [Polaris Web Components](https://shopify.dev/docs/api/app-home/polaris-web-components).
-- [App extensions](https://shopify.dev/docs/apps/app-extensions/list)
-- [Shopify Functions](https://shopify.dev/docs/api/functions)
-
-Internationalization:
-
-- [Internationalizing your app](https://shopify.dev/docs/apps/best-practices/internationalization/getting-started)
+- **Layout shift:** CLS is 0.017 when the reserved slot is released, either because the product has no timer or because the timer is a bar. Syncing a per-product hint to an app metafield would let the theme reserve space only when needed.
+- **Single instance:** the rate limiter and impression buffer are in memory. Moving them to Redis would support several instances. A crash can lose up to 5 seconds of impressions.
+- **Caching delay:** timer changes can take up to about a minute to show on the storefront.
+- **Not built yet:**
+  - GDPR compliance webhooks (required for the App Store)
+  - deleting a shop's timers after uninstall
+  - dashboard pagination
+  - an on/off switch per timer
+  - impression charts over time
+- **More tests:** end-to-end tests for the admin UI and the theme block.
