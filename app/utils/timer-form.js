@@ -15,8 +15,8 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
 // Turns a stored timer (or {} for a new one) into the values the form edits.
 export function toFormValues(timer, resources, timeZone, now = new Date()) {
   const values = { ...TIMER_DEFAULTS, type: "fixed", name: "", targetIds: [], ...timer };
-  // New timers start at the next half hour and run for a week.
-  const defaultStart = Math.ceil(now.getTime() / HALF_HOUR) * HALF_HOUR;
+  // New timers start at the current half hour, so they're live once saved, and run for a week.
+  const defaultStart = Math.floor(now.getTime() / HALF_HOUR) * HALF_HOUR;
   const start = toZonedParts(values.startsAt ?? defaultStart, timeZone);
   const end = toZonedParts(values.endsAt ?? defaultStart + WEEK, timeZone);
   const duration = splitDuration(values.durationMinutes ?? 60);

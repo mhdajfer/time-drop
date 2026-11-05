@@ -4,15 +4,15 @@ import { formatTimeLabel, timeOptionsWith, toFormValues, toTimerInput } from "./
 const timeZone = "America/New_York";
 
 describe("toFormValues", () => {
-  it("starts new timers at the next half hour in the store's timezone and runs them for a week", () => {
+  it("starts new timers at the current half hour in the store's timezone and runs them for a week", () => {
     const values = toFormValues({}, [], timeZone, new Date("2026-11-27T14:10:00Z"));
 
     expect(values).toMatchObject({
       type: "fixed",
       startDate: "2026-11-27",
-      startTime: "09:30",
+      startTime: "09:00",
       endDate: "2026-12-04",
-      endTime: "09:30",
+      endTime: "09:00",
       targetType: "all",
       targets: [],
     });
