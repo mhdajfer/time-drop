@@ -25,6 +25,14 @@ export function getTimerStatus(timer, now = new Date()) {
   return "active";
 }
 
+export function formatDuration(minutes) {
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const mins = minutes % 60;
+
+  return [days && `${days}d`, hours && `${hours}h`, mins && `${mins}m`].filter(Boolean).join(" ");
+}
+
 // API shape: a plain string id instead of Mongo's _id, plus the current status.
 export function serializeTimer({ _id, ...timer }, now = new Date()) {
   return { id: String(_id), ...timer, status: getTimerStatus(timer, now) };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findTimerForProduct, getTimerStatus, matchesProduct } from "./timer";
+import { findTimerForProduct, formatDuration, getTimerStatus, matchesProduct } from "./timer";
 
 const now = new Date("2026-11-20T12:00:00Z");
 const product = "gid://shopify/Product/1";
@@ -33,6 +33,15 @@ describe("getTimerStatus", () => {
 
   it("treats evergreen timers as always active", () => {
     expect(getTimerStatus({ type: "evergreen", durationMinutes: 30 }, now)).toBe("active");
+  });
+});
+
+describe("formatDuration", () => {
+  it("shows evergreen lengths in days, hours and minutes", () => {
+    expect(formatDuration(45)).toBe("45m");
+    expect(formatDuration(150)).toBe("2h 30m");
+    expect(formatDuration(1440)).toBe("1d");
+    expect(formatDuration(1530)).toBe("1d 1h 30m");
   });
 });
 
