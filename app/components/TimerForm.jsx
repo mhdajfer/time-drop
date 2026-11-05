@@ -170,13 +170,10 @@ export function TimerForm({
             label="Show the timer on"
             values={[values.targetType]}
             error={errors.targetIds}
-            onChange={(event) =>
-              setValues((current) => ({
-                ...current,
-                targetType: event.currentTarget.values[0],
-                targets: [],
-              }))
-            }
+            onChange={(event) => {
+              const targetType = event.currentTarget.values[0];
+              setValues((current) => ({ ...current, targetType, targets: [] }));
+            }}
           >
             <s-choice value="all">All products</s-choice>
             <s-choice value="products">Specific products</s-choice>
