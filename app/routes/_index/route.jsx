@@ -27,9 +27,10 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
+        <h1 className={styles.heading}>TimeDrop</h1>
         <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
+          Countdown timers for your product pages that turn promotions into
+          sales.
         </p>
         {showForm && (
           <Form className={styles.form} method="post">
@@ -45,16 +46,16 @@ export default function App() {
         )}
         <ul className={styles.list}>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Scheduled and evergreen timers</strong>. Run a sale between
+            fixed dates, or give every visitor their own countdown.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Targeted to your catalog</strong>. Show a timer on every
+            product, chosen products, or whole collections.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Built-in analytics</strong>. See how many shoppers saw each
+            timer, right from your admin.
           </li>
         </ul>
       </div>
