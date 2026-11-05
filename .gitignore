@@ -46,3 +46,6 @@ pnpm-debug.log*
 
 # Local AI agent settings
 .claude/settings.local.json
+
+# Built storefront widget (npm run build:widget)
+/extensions/countdown-timer/assets/countdown-timer.js
