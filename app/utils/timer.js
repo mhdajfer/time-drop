@@ -41,6 +41,23 @@ export function serializeTimer({ _id, ...timer }, now = new Date()) {
   return { id: String(_id), ...timer, status: getTimerStatus(timer, now) };
 }
 
+// What the storefront widget receives. Internal fields such as the shop, name and impressions stay private.
+export function toStorefrontTimer(timer) {
+  return {
+    id: String(timer._id),
+    type: timer.type,
+    endsAt: timer.endsAt,
+    durationMinutes: timer.durationMinutes,
+    message: timer.description || DEFAULT_MESSAGE,
+    backgroundColor: timer.backgroundColor,
+    textColor: timer.textColor,
+    size: timer.size,
+    position: timer.position,
+    urgency: timer.urgency,
+    urgencyMinutes: timer.urgencyMinutes,
+  };
+}
+
 export function matchesProduct(timer, { productId, collectionIds = [] }) {
   if (timer.targetType === "all") return true;
   if (timer.targetType === "products") return timer.targetIds.includes(productId);

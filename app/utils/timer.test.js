@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { findTimerForProduct, formatDuration, getTimerStatus, matchesProduct } from "./timer";
+import {
+  DEFAULT_MESSAGE,
+  findTimerForProduct,
+  formatDuration,
+  getTimerStatus,
+  matchesProduct,
+  toStorefrontTimer,
+} from "./timer";
 
 const now = new Date("2026-11-20T12:00:00Z");
 const product = "gid://shopify/Product/1";
@@ -42,6 +49,25 @@ describe("formatDuration", () => {
     expect(formatDuration(150)).toBe("2h 30m");
     expect(formatDuration(1440)).toBe("1d");
     expect(formatDuration(1530)).toBe("1d 1h 30m");
+  });
+});
+
+describe("toStorefrontTimer", () => {
+  it("sends the widget only what it needs, with a default message", () => {
+    const timer = fixedTimer({
+      _id: "6650f1c2a1b2c3d4e5f60718",
+      shop: "test.myshopify.com",
+      name: "Internal name",
+      description: "",
+      impressions: 42,
+    });
+
+    const storefrontTimer = toStorefrontTimer(timer);
+
+    expect(storefrontTimer).toMatchObject({ id: "6650f1c2a1b2c3d4e5f60718", message: DEFAULT_MESSAGE });
+    expect(storefrontTimer).not.toHaveProperty("shop");
+    expect(storefrontTimer).not.toHaveProperty("name");
+    expect(storefrontTimer).not.toHaveProperty("impressions");
   });
 });
 
