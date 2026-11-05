@@ -13,8 +13,6 @@ desktop.ini
 /app/public/build
 
 # Local databases (contain shop sessions and access tokens)
-/prisma/dev.sqlite
-/prisma/dev.sqlite-journal
 database.sqlite
 *.sqlite
 *.sqlite-journal
