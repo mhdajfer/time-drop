@@ -25,6 +25,11 @@ export function getTimerStatus(timer, now = new Date()) {
   return "active";
 }
 
+// API shape: a plain string id instead of Mongo's _id, plus the current status.
+export function serializeTimer({ _id, ...timer }, now = new Date()) {
+  return { id: String(_id), ...timer, status: getTimerStatus(timer, now) };
+}
+
 export function matchesProduct(timer, { productId, collectionIds = [] }) {
   if (timer.targetType === "all") return true;
   if (timer.targetType === "products") return timer.targetIds.includes(productId);
