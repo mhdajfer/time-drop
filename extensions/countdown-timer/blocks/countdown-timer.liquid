@@ -1,0 +1,26 @@
+{% comment %}
+  The countdown itself is rendered by countdown-timer.js. The min-height matches the
+  timer's height, so the page doesn't move when it appears.
+{% endcomment %}
+<div
+  class="timedrop"
+  style="min-height: 96px;"
+  data-timedrop
+  data-product-id="{{ product.id }}"
+  data-collection-ids="{{ product.collections | map: 'id' | join: ',' }}"
+  data-proxy-path="/apps/timedrop"
+  {{ block.shopify_attributes }}
+></div>
+
+{% schema %}
+{
+  "name": "Countdown timer",
+  "target": "section",
+  "enabled_on": {
+    "templates": ["product"]
+  },
+  "javascript": "countdown-timer.js",
+  "stylesheet": "countdown-timer.css",
+  "settings": []
+}
+{% endschema %}

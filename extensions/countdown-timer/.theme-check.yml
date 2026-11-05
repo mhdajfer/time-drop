@@ -1,0 +1,8 @@
+# Shopify's guideline for app block JavaScript is 10 KB compressed, but this check
+# measures the raw file. Preact alone is about 13 KB raw, so the raw threshold is raised;
+# the widget bundle is about 7 KB gzipped (printed by `npm run build:widget`).
+extends: theme-check:theme-app-extension
+
+AssetSizeAppBlockJavaScript:
+  enabled: true
+  thresholdInBytes: 20000

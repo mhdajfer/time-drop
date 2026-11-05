@@ -1,0 +1,124 @@
+.timedrop {
+  margin: 12px 0;
+}
+
+.timedrop[hidden] {
+  display: none;
+}
+
+/* Inline timers are always 96px tall, the space the block reserves while loading. */
+.timedrop__timer {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 96px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.timedrop__message {
+  margin: 0;
+  max-width: 100%;
+  font-size: 14px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timedrop__segments {
+  display: flex;
+  gap: 16px;
+}
+
+.timedrop__segment {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 2.2em;
+}
+
+/* Tabular digits keep every number the same width, so nothing shifts as it ticks. */
+.timedrop__value {
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.timedrop__label {
+  font-size: 10px;
+  line-height: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.timedrop__timer--small .timedrop__value {
+  font-size: 20px;
+}
+
+.timedrop__timer--medium .timedrop__value {
+  font-size: 26px;
+}
+
+.timedrop__timer--large .timedrop__value {
+  font-size: 32px;
+}
+
+/* transform doesn't affect layout, so the pulse never moves the page. */
+.timedrop__timer--urgent {
+  animation: timedrop-pulse 1s ease-in-out infinite;
+}
+
+@keyframes timedrop-pulse {
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timedrop__timer--urgent {
+    animation: none;
+    outline: 2px solid currentColor;
+    outline-offset: -5px;
+  }
+}
+
+.timedrop-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 2147483000;
+}
+
+.timedrop-bar--top {
+  top: 0;
+}
+
+.timedrop-bar--bottom {
+  bottom: 0;
+}
+
+.timedrop-bar .timedrop__timer {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  height: auto;
+  padding: 8px 16px;
+  border-radius: 0;
+}
+
+.timedrop__placeholder {
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px dashed currentColor;
+  border-radius: 8px;
+  font-size: 13px;
+  opacity: 0.7;
+}

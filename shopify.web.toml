@@ -2,4 +2,5 @@ name = "React Router"
 roles = ["frontend", "backend"]
 webhooks_path = "/webhooks/app/uninstalled"
 [commands]
+predev = "npm run build:widget"
 dev = "npm exec react-router dev"
